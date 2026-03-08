@@ -3,98 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>LentraSBooth | Pro Flow</title>
+    <title>LentraSBooth | Instax Edition</title>
     <style>
         :root { --accent: #ff4757; }
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; background: #000; color: white; margin: 0; padding: 0; overflow-x: hidden; }
+        body { font-family: sans-serif; background: #000; color: white; margin: 0; padding: 0; overflow: hidden; width: 100vw; height: 100vh; }
         
-        #stage { 
-            position: relative; width: 100vw; height: 56.25vw; /* 16:9 ratio */
-            max-width: 800px; max-height: 450px;
-            overflow: hidden; background: #111; border-bottom: 2px solid #333;
-            transition: all 0.5s ease;
-        }
-
-        /* Full Screen Class */
-        body.is-shooting #stage {
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            max-width: none; max-height: none; z-index: 100; border: none;
-        }
-        
+        #stage { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; overflow: hidden; background: #000; z-index: 10; }
         video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
         .bw-mode { filter: grayscale(100%); }
 
-        #countdown {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            font-size: 15vw; font-weight: 900; z-index: 110; pointer-events: none;
-            text-shadow: 0 0 30px rgba(0,0,0,0.8); color: #fff;
-        }
-
-        #flash {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: white; opacity: 0; z-index: 111; pointer-events: none;
-        }
+        #countdown { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 25vw; font-weight: 900; z-index: 20; text-shadow: 0 0 30px rgba(0,0,0,0.8); pointer-events: none; }
+        #flash { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: white; opacity: 0; z-index: 21; pointer-events: none; }
         .flash-active { animation: flash 0.3s ease-out; }
         @keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
 
-        .controls { padding: 20px; width: 100%; max-width: 400px; display: flex; gap: 10px; box-sizing: border-box; }
-        body.is-shooting .controls { display: none; }
+        /* Selection Screen */
+        #selectionOverlay {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.95); z-index: 50; display: none;
+            flex-direction: column; align-items: center; justify-content: center;
+        }
+        .options-container { display: flex; gap: 10px; width: 90%; justify-content: center; }
+        .option-card { width: 30%; border: 3px solid transparent; border-radius: 8px; overflow: hidden; cursor: pointer; }
+        .option-card img { width: 100%; display: block; }
+        .option-card.selected { border-color: var(--accent); }
 
-        #snap { flex-grow: 1; padding: 20px; font-size: 1.2rem; border-radius: 12px; border: none; background: var(--accent); color: white; font-weight: bold; }
-        #filterToggle { padding: 20px; font-size: 1rem; border-radius: 12px; border: 2px solid #444; background: #222; color: white; font-weight: bold; width: 100px; }
-
-        #gallery { display: flex; flex-direction: column; gap: 20px; width: 90%; max-width: 400px; padding-bottom: 50px; }
-        .strip { background: white; padding: 15px; border-radius: 2px; box-shadow: 0 10px 40px rgba(0,0,0,1); }
-        .strip img { width: 100%; height: auto; display: block; }
+        /* Instax Result Overlay */
+        #resultOverlay {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.9); z-index: 100; display: none;
+            flex-direction: column; align-items: center; justify-content: center;
+        }
+        .instax-frame { 
+            background: #fdfdfd; padding: 20px 20px 80px 20px; /* Wider bottom for Instax look */
+            box-shadow: 0 10px 50px rgba(0,0,0,0.8); border-radius: 4px;
+        }
+        .instax-frame img { width: 280px; height: 350px; object-fit: cover; display: block; border: 1px solid #ddd; }
+        
+        .btn-row { display: flex; gap: 15px; margin-top: 30px; }
+        .btn { padding: 15px 30px; border-radius: 30px; border: none; font-weight: bold; cursor: pointer; }
+        #saveBtn { background: var(--accent); color: white; }
+        #closeBtn { background: #444; color: white; }
+        
+        #hint { position: absolute; bottom: 10%; width: 100%; text-align: center; font-size: 1.2rem; z-index: 15; pointer-events: none; opacity: 0.7; }
     </style>
 </head>
 <body>
 
-    <div id="stage">
+    <div id="stage" onclick="startSession()">
+        <div id="hint">TAP TO START (3 SHOTS)</div>
         <div id="countdown"></div>
         <div id="flash"></div>
         <video id="video" autoplay playsinline></video>
     </div>
 
-    <div class="controls">
-        <button id="filterToggle">COLOR</button>
-        <button id="snap">START SESSION</button>
+    <div id="selectionOverlay">
+        <h2 style="margin-bottom: 20px;">CHOOSE YOUR FAVORITE</h2>
+        <div class="options-container" id="options"></div>
     </div>
 
-    <div id="gallery"></div>
+    <div id="resultOverlay">
+        <div class="instax-frame" id="instaxFrame"></div>
+        <div class="btn-row">
+            <button class="btn" id="saveBtn">DOWNLOAD INSTAX</button>
+            <button class="btn" id="closeBtn" onclick="location.reload()">RETAKE</button>
+        </div>
+    </div>
+
     <canvas id="canvas" style="display:none;"></canvas>
 
     <script>
         const video = document.getElementById('video');
-        const snapBtn = document.getElementById('snap');
-        const filterBtn = document.getElementById('filterToggle');
         const countdownEl = document.getElementById('countdown');
         const flashEl = document.getElementById('flash');
-        const gallery = document.getElementById('gallery');
+        const selectionOverlay = document.getElementById('selectionOverlay');
+        const optionsContainer = document.getElementById('options');
+        const resultOverlay = document.getElementById('resultOverlay');
+        const instaxFrame = document.getElementById('instaxFrame');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
 
-        let isBnW = false;
+        let capturedImages = [];
+        let isShooting = false;
 
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
             .then(s => video.srcObject = s);
 
-        filterBtn.addEventListener('click', () => {
-            isBnW = !isBnW;
-            filterBtn.innerText = isBnW ? "B&W" : "COLOR";
-            video.classList.toggle('bw-mode', isBnW);
-        });
+        async function startSession() {
+            if (isShooting) return;
+            isShooting = true;
+            document.getElementById('hint').style.display = 'none';
+            capturedImages = [];
 
-        snapBtn.addEventListener('click', async () => {
-            // ENTER CINEMA MODE
-            document.body.classList.add('is-shooting');
-            // Try to trigger browser fullscreen for a cleaner look
-            if (document.documentElement.requestFullscreen) {
-                document.documentElement.requestFullscreen().catch(() => {});
-            }
-
-            const captures = [];
-            for (let i = 0; i < 4; i++) {
+            for (let i = 0; i < 3; i++) {
                 for (let c = 3; c > 0; c--) {
                     countdownEl.innerText = c;
                     await new Promise(r => setTimeout(r, 1000));
@@ -104,12 +105,13 @@
                 setTimeout(() => flashEl.classList.remove('flash-active'), 300);
 
                 const temp = document.createElement('canvas');
-                temp.width = 1280; temp.height = 720;
+                temp.width = 800; temp.height = 1000; // Instax Photo Ratio
                 const tCtx = temp.getContext('2d');
                 
+                // Crop Logic for Vertical Instax
                 const vW = video.videoWidth;
                 const vH = video.videoHeight;
-                const targetRatio = 16 / 9;
+                const targetRatio = 800 / 1000;
                 let sW, sH, sX, sY;
 
                 if ((vW / vH) > targetRatio) {
@@ -118,43 +120,59 @@
                     sW = vW; sH = vW / targetRatio; sX = 0; sY = (vH - sH) / 2;
                 }
 
-                if (isBnW) tCtx.filter = 'grayscale(100%)';
                 tCtx.translate(temp.width, 0);
                 tCtx.scale(-1, 1);
                 tCtx.drawImage(video, sX, sY, sW, sH, 0, 0, temp.width, temp.height);
-                captures.push(temp);
+                capturedImages.push(temp.toDataURL('image/png'));
                 await new Promise(r => setTimeout(r, 500)); 
             }
 
-            // EXIT CINEMA MODE
-            document.body.classList.remove('is-shooting');
-            if (document.fullscreenElement) {
-                document.exitFullscreen().catch(() => {});
-            }
+            showSelection();
+        }
 
-            render(captures);
-        });
-
-        function render(images) {
-            const w = 1280, h = 720, p = 50;
-            canvas.width = w + (p * 2);
-            canvas.height = (h * 4) + (p * 5);
-            ctx.fillStyle = "white";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            images.forEach((img, i) => {
-                ctx.drawImage(img, p, p + (i * (h + p)));
+        function showSelection() {
+            selectionOverlay.style.display = 'flex';
+            optionsContainer.innerHTML = '';
+            capturedImages.forEach((src, idx) => {
+                const div = document.createElement('div');
+                div.className = 'option-card';
+                div.innerHTML = `<img src="${src}">`;
+                div.onclick = () => generateInstax(src);
+                optionsContainer.appendChild(div);
             });
-            const data = canvas.toDataURL('image/png');
-            const div = document.createElement('div');
-            div.className = 'strip';
-            div.innerHTML = `<img src="${data}">`;
-            div.onclick = () => {
-                const a = document.createElement('a');
-                a.href = data; a.download = `booth-${Date.now()}.png`; a.click();
+        }
+
+        function generateInstax(selectedSrc) {
+            selectionOverlay.style.display = 'none';
+            
+            // Instax Canvas Dimensions
+            const p = 40; // Side padding
+            const bottomP = 160; // Signature area
+            canvas.width = 800 + (p * 2);
+            canvas.height = 1000 + p + bottomP;
+
+            // Draw Frame
+            ctx.fillStyle = "#fdfdfd"; // Off-white Instax paper
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const img = new Image();
+            img.onload = () => {
+                ctx.drawImage(img, p, p, 800, 1000);
+                
+                // Subtle shadow/border inside
+                ctx.strokeStyle = "#ddd";
+                ctx.strokeRect(p, p, 800, 1000);
+
+                const finalData = canvas.toDataURL('image/png');
+                instaxFrame.innerHTML = `<img src="${finalData}">`;
+                resultOverlay.style.display = 'flex';
+
+                document.getElementById('saveBtn').onclick = () => {
+                    const a = document.createElement('a');
+                    a.href = finalData; a.download = `instax-${Date.now()}.png`; a.click();
+                };
             };
-            gallery.prepend(div);
-            // Scroll to the top so user sees their photo
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            img.src = selectedSrc;
         }
     </script>
 </body>
