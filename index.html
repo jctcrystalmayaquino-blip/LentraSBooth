@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>LentraSBooth | Double Instax</title>
+    <title>LentraSBooth | Auto-Reset Kiosk</title>
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <style>
         :root { --accent: #ff4757; }
         body { font-family: -apple-system, sans-serif; background: #000; color: white; margin: 0; padding: 0; overflow: hidden; width: 100vw; height: 100vh; }
@@ -19,36 +21,37 @@
         #hint { position: absolute; bottom: 10%; width: 100%; text-align: center; font-size: 1.5rem; font-weight: bold; z-index: 15; pointer-events: none; animation: pulse 2s infinite; text-shadow: 0 2px 10px rgba(0,0,0,1); }
         @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
 
+        /* Selection Overlay */
         #selectionOverlay {
             position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
             background: rgba(0,0,0,0.95); z-index: 50; display: none;
             flex-direction: column; align-items: center; justify-content: center;
         }
-        .options-container { display: flex; gap: 15px; width: 95%; max-width: 1000px; justify-content: center; }
+        .options-container { display: flex; gap: 10px; width: 95%; max-width: 1000px; justify-content: center; }
         .option-card { width: 30%; cursor: pointer; border: 6px solid transparent; border-radius: 12px; overflow: hidden; transition: 0.2s; position: relative; }
         .option-card img { width: 100%; display: block; }
         .option-card.selected { border-color: var(--accent); transform: scale(1.05); }
         .option-card.selected::after { content: "✓"; position: absolute; top: 10px; right: 10px; background: var(--accent); color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
 
+        /* Result Overlay */
         #resultOverlay {
             position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
             background: rgba(0,0,0,0.95); z-index: 100; display: none;
             flex-direction: column; align-items: center; justify-content: center; padding: 20px;
         }
-        .instax-results { display: flex; gap: 20px; max-width: 100%; justify-content: center; }
-        .instax-item { text-align: center; }
-        .instax-preview { box-shadow: 0 20px 60px rgba(0,0,0,1); line-height: 0; margin-bottom: 15px; }
+        .instax-results { display: flex; gap: 15px; max-width: 100%; justify-content: center; }
+        .instax-preview { box-shadow: 0 20px 60px rgba(0,0,0,1); line-height: 0; }
         .instax-preview img { height: auto; max-height: 60vh; max-width: 100%; display: block; }
         
         .btn-row { display: flex; gap: 15px; margin-top: 25px; width: 100%; max-width: 500px; }
-        .btn { flex: 1; padding: 18px; border-radius: 50px; border: none; font-weight: bold; cursor: pointer; font-size: 1rem; }
-        .save-all { background: var(--accent); color: white; }
-        .retake { background: #333; color: white; }
+        .btn { flex: 1; padding: 18px; border-radius: 50px; border: none; font-weight: bold; cursor: pointer; font-size: 1rem; text-transform: uppercase; }
+        .save-btn { background: var(--accent); color: white; }
+        .retake-btn { background: #333; color: white; }
     </style>
 </head>
 <body>
 
-    <div id="stage" onclick="startSession()">
+    <div id="stage" onclick="handleStageClick()">
         <div id="hint">TAP TO START (3 SHOTS)</div>
         <div id="countdown"></div>
         <div id="flash"></div>
@@ -56,15 +59,16 @@
     </div>
 
     <div id="selectionOverlay">
-        <h2 id="pickTitle" style="margin-bottom: 30px;">PICK 2 PHOTOS</h2>
+        <h2 style="margin-bottom: 20px;">PICK 2 FAVORITES</h2>
         <div class="options-container" id="options"></div>
+        <button class="btn retake-btn" style="margin-top: 30px; max-width: 200px;" onclick="resetBooth()">CANCEL</button>
     </div>
 
     <div id="resultOverlay">
         <div class="instax-results" id="instaxResults"></div>
         <div class="btn-row">
-            <button class="btn save-all" id="downloadAll">SAVE BOTH PHOTOS</button>
-            <button class="btn retake" onclick="location.reload()">RETAKE</button>
+            <button class="btn save-btn" id="downloadAll">SAVE BOTH</button>
+            <button class="btn retake-btn" onclick="resetBooth()">DONE</button>
         </div>
     </div>
 
@@ -84,20 +88,25 @@
         let capturedImages = [];
         let selectedIndices = [];
         let isShooting = false;
+        let finalFiles = [];
 
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
             .then(s => video.srcObject = s);
 
-        async function startSession() {
+        function handleStageClick() {
             if (isShooting) return;
+            const docEl = document.documentElement;
+            if (docEl.requestFullscreen) { docEl.requestFullscreen(); }
+            else if (docEl.webkitRequestFullscreen) { docEl.webkitRequestFullscreen(); }
+            startSession();
+        }
+
+        async function startSession() {
             isShooting = true;
             document.getElementById('hint').style.display = 'none';
             capturedImages = [];
             selectedIndices = [];
-
-            if (document.documentElement.requestFullscreen) {
-                document.documentElement.requestFullscreen().catch(() => {});
-            }
+            finalFiles = [];
 
             for (let i = 0; i < 3; i++) {
                 for (let c = 3; c > 0; c--) {
@@ -111,7 +120,6 @@
                 const temp = document.createElement('canvas');
                 temp.width = 800; temp.height = 1000;
                 const tCtx = temp.getContext('2d');
-                
                 const vW = video.videoWidth;
                 const vH = video.videoHeight;
                 const targetRatio = 800 / 1000;
@@ -139,62 +147,63 @@
                 const div = document.createElement('div');
                 div.className = 'option-card';
                 div.innerHTML = `<img src="${src}">`;
-                div.onclick = () => handleSelection(index, div);
+                div.onclick = () => {
+                    if (selectedIndices.includes(index)) return;
+                    selectedIndices.push(index);
+                    div.classList.add('selected');
+                    if (selectedIndices.length === 2) {
+                        setTimeout(processDoubleInstax, 500);
+                    }
+                };
                 optionsContainer.appendChild(div);
             });
-        }
-
-        function handleSelection(index, element) {
-            if (selectedIndices.includes(index)) return;
-            
-            selectedIndices.push(index);
-            element.classList.add('selected');
-
-            if (selectedIndices.length === 2) {
-                setTimeout(processDoubleInstax, 500);
-            }
         }
 
         async function processDoubleInstax() {
             selectionOverlay.style.display = 'none';
             instaxResults.innerHTML = '';
-            const finalFiles = [];
-
             for (let srcIndex of selectedIndices) {
                 const dataUrl = await generateInstaxData(capturedImages[srcIndex]);
                 finalFiles.push(dataUrl);
-                
                 const container = document.createElement('div');
-                container.className = 'instax-item';
                 container.innerHTML = `<div class="instax-preview"><img src="${dataUrl}"></div>`;
                 instaxResults.appendChild(container);
             }
-
             resultOverlay.style.display = 'flex';
+        }
 
-            document.getElementById('downloadAll').onclick = () => {
-                finalFiles.forEach((file, i) => {
-                    const a = document.createElement('a');
-                    a.href = file;
-                    a.download = `LentraSBooth-Instax-${i+1}.png`;
-                    a.click();
-                });
-            };
+        // Logic to Save and then Loop back
+        document.getElementById('downloadAll').onclick = () => {
+            finalFiles.forEach((file, i) => {
+                const a = document.createElement('a');
+                a.href = file;
+                a.download = `Instax-${Date.now()}-${i+1}.png`;
+                a.click();
+            });
+            // Brief pause so the downloads trigger before the screen clears
+            setTimeout(resetBooth, 1000);
+        };
+
+        function resetBooth() {
+            // Hide all overlays
+            resultOverlay.style.display = 'none';
+            selectionOverlay.style.display = 'none';
+            // Reset state
+            isShooting = false;
+            capturedImages = [];
+            selectedIndices = [];
+            finalFiles = [];
+            // Show start hint
+            document.getElementById('hint').style.display = 'block';
         }
 
         function generateInstaxData(selectedSrc) {
             return new Promise((resolve) => {
-                const p = 50; 
-                const photoW = 800;
-                const photoH = 1000;
-                const bottomP = 250;
-
+                const p = 50; const photoW = 800; const photoH = 1000; const bottomP = 250;
                 canvas.width = photoW + (p * 2);
                 canvas.height = photoH + p + bottomP;
-
                 ctx.fillStyle = "#ffffff"; 
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
-
                 const img = new Image();
                 img.onload = () => {
                     ctx.drawImage(img, p, p, photoW, photoH);
