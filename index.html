@@ -3,36 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>LentraSBooth | External Cam</title>
+    <title>LentraSBooth | Full Screen</title>
     <style>
         :root { --accent: #ff4757; }
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; background: #000; color: white; margin: 0; padding: 10px; }
-        #stage { position: relative; width: 100%; max-width: 600px; aspect-ratio: 16/9; border: 2px solid #444; overflow: hidden; background: #111; }
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; background: #000; color: white; margin: 0; padding: 10px; overflow-x: hidden; }
+        
+        /* The Stage */
+        #stage { 
+            position: relative; width: 100%; max-width: 600px; 
+            aspect-ratio: 16/9; border: 2px solid #444; overflow: hidden; background: #111;
+            border-radius: 8px;
+        }
+        
         video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
         .bw-mode { filter: grayscale(100%); -webkit-filter: grayscale(100%); }
-        #countdown { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 80px; font-weight: bold; z-index: 10; text-shadow: 0 0 15px rgba(0,0,0,0.8); }
-        #flash { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: white; opacity: 0; z-index: 11; pointer-events: none; }
+
+        /* Full Screen Toggle Button */
+        #fsToggle {
+            position: absolute; top: 10px; right: 10px; z-index: 20;
+            background: rgba(0,0,0,0.5); border: 1px solid #fff; color: white;
+            padding: 8px; border-radius: 5px; font-size: 12px; cursor: pointer;
+        }
+
+        #countdown {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 80px; font-weight: bold; z-index: 10; pointer-events: none;
+            text-shadow: 0 0 15px rgba(0,0,0,0.8);
+        }
+
+        #flash {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: white; opacity: 0; z-index: 11; pointer-events: none;
+        }
         .flash-active { animation: flash 0.3s ease-out; }
         @keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
+
         .controls { width: 100%; max-width: 600px; margin: 15px 0; display: flex; gap: 10px; }
         #snap { flex-grow: 1; padding: 18px; font-size: 1.1rem; border-radius: 8px; border: none; background: var(--accent); color: white; font-weight: bold; cursor: pointer; }
         #filterToggle { padding: 18px; font-size: 1.1rem; border-radius: 8px; border: 2px solid #444; background: #222; color: white; font-weight: bold; cursor: pointer; width: 100px; }
-        #gallery { display: flex; flex-direction: column; gap: 20px; width: 100%; max-width: 400px; }
+
+        #gallery { display: flex; flex-direction: column; gap: 20px; width: 100%; max-width: 400px; padding-bottom: 40px; }
         .strip { background: white; padding: 15px; border-radius: 2px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); margin-top: 10px;}
         .strip img { width: 100%; height: auto; display: block; }
     </style>
 </head>
 <body>
-    <h3 style="margin: 10px 0;">LENTRASBOOTH</h3>
+
+    <h3 id="title" style="margin: 10px 0;">LENTRASBOOTH</h3>
+
     <div id="stage">
+        <button id="fsToggle">⛶ FULLSCREEN</button>
         <div id="countdown"></div>
         <div id="flash"></div>
         <video id="video" autoplay playsinline></video>
     </div>
+
     <div class="controls">
         <button id="filterToggle">COLOR</button>
         <button id="snap">TAKE 4 PHOTOS</button>
     </div>
+
     <div id="gallery"></div>
     <canvas id="canvas" style="display:none;"></canvas>
 
@@ -40,6 +70,7 @@
         const video = document.getElementById('video');
         const snapBtn = document.getElementById('snap');
         const filterBtn = document.getElementById('filterToggle');
+        const fsBtn = document.getElementById('fsToggle');
         const countdownEl = document.getElementById('countdown');
         const flashEl = document.getElementById('flash');
         const gallery = document.getElementById('gallery');
@@ -48,25 +79,31 @@
 
         let isBnW = false;
 
-        // UPDATED: More flexible camera constraints
-        const constraints = {
-            video: {
-                width: { ideal: 1280 },
-                height: { ideal: 720 },
-                facingMode: "user" // Defaults to selfie, but allows override
+        // Camera Init
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+            .then(s => video.srcObject = s);
+
+        // --- Full Screen Logic ---
+        fsBtn.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    alert(`Error attempting to enable full-screen mode: ${err.message}`);
+                });
+                fsBtn.innerText = "EXIT FS";
+            } else {
+                document.exitFullscreen();
+                fsBtn.innerText = "⛶ FULLSCREEN";
             }
-        };
+        });
 
-        navigator.mediaDevices.getUserMedia(constraints)
-            .then(s => { video.srcObject = s; })
-            .catch(err => { alert("Camera error: " + err.message); });
-
+        // Filter Toggle
         filterBtn.addEventListener('click', () => {
             isBnW = !isBnW;
             filterBtn.innerText = isBnW ? "B&W" : "COLOR";
-            video.style.filter = isBnW ? "grayscale(100%)" : "none";
+            video.classList.toggle('bw-mode', isBnW);
         });
 
+        // Capture Logic (with Anti-Stretch Math)
         snapBtn.addEventListener('click', async () => {
             snapBtn.disabled = true;
             const captures = [];
@@ -83,11 +120,11 @@
                 temp.width = 1280; temp.height = 720;
                 const tCtx = temp.getContext('2d');
                 
-                // Crop & Mirror Logic
                 const vW = video.videoWidth;
                 const vH = video.videoHeight;
                 const targetRatio = 16 / 9;
                 let sW, sH, sX, sY;
+
                 if ((vW / vH) > targetRatio) {
                     sH = vH; sW = vH * targetRatio; sX = (vW - sW) / 2; sY = 0;
                 } else {
