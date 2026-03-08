@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>LentraSBooth | No-Stretch</title>
+    <title>LentraSBooth | Fixed Proportions</title>
     <style>
-        :root { --accent: #ff4757; --bg: #121212; }
+        :root { --accent: #ff4757; --bg: #000000; }
         body { 
             font-family: sans-serif; display: flex; flex-direction: column; 
             align-items: center; background: var(--bg); color: white; 
@@ -14,38 +14,43 @@
 
         #stage { 
             position: relative; width: 100%; max-width: 600px; 
-            aspect-ratio: 16/9; border: 4px solid #333; 
-            border-radius: 12px; overflow: hidden; background: #000;
+            aspect-ratio: 16/9; border: 2px solid #444; 
+            border-radius: 8px; overflow: hidden; background: #111;
         }
 
-        /* This ensures the preview on screen isn't stretched */
+        /* Object-fit: cover prevents the preview from stretching */
         video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
 
         #countdown {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            font-size: 80px; font-weight: 900; z-index: 10; text-shadow: 0 0 20px black;
+            font-size: 100px; font-weight: 900; z-index: 10; color: white;
+            text-shadow: 0 0 20px rgba(0,0,0,0.8);
         }
 
         #flash {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: white; opacity: 0; z-index: 11; pointer-events: none;
         }
-        .flash-active { animation: flashAnim 0.4s ease-out; }
+        .flash-active { animation: flashAnim 0.3s ease-out; }
         @keyframes flashAnim { 0% { opacity: 1; } 100% { opacity: 0; } }
 
         .controls { width: 100%; max-width: 600px; margin: 20px 0; }
         #snap { 
-            width: 100%; padding: 18px; font-size: 1.1rem; cursor: pointer; border: none; 
-            border-radius: 10px; background: var(--accent); color: white; font-weight: bold;
+            width: 100%; padding: 20px; font-size: 1.2rem; cursor: pointer; border: none; 
+            border-radius: 50px; background: var(--accent); color: white; font-weight: bold;
+            box-shadow: 0 5px 15px rgba(255, 71, 87, 0.3);
         }
+        #snap:disabled { background: #333; opacity: 0.5; }
 
-        #gallery { display: flex; flex-direction: column; gap: 20px; width: 100%; max-width: 400px; }
-        .strip-container { background: white; padding: 15px; border-radius: 4px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
-        .strip-container img { width: 100%; height: auto; display: block; }
-        .footer-text { color: #333; font-size: 14px; text-align: center; margin-top: 10px; font-weight: bold; letter-spacing: 1px; }
+        #gallery { display: flex; flex-direction: column; gap: 25px; width: 100%; max-width: 380px; margin-top: 10px; }
+        .strip-container { background: white; padding: 15px; border-radius: 2px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
+        .strip-container img { width: 100%; height: auto; display: block; border: 1px solid #eee; }
+        .footer-text { color: #222; font-size: 16px; text-align: center; margin-top: 15px; font-weight: bold; font-family: 'Arial Black', sans-serif; }
     </style>
 </head>
 <body>
+
+    <h2 style="margin-bottom: 10px; color: #ff4757;">LentraSBooth</h2>
 
     <div id="stage">
         <div id="countdown"></div>
@@ -54,7 +59,7 @@
     </div>
 
     <div class="controls">
-        <button id="snap">START PHOTO SESSION</button>
+        <button id="snap">START SESSION</button>
     </div>
 
     <div id="gallery"></div>
@@ -69,12 +74,21 @@
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
 
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
-            .then(stream => { video.srcObject = stream; });
+        navigator.mediaDevices.getUserMedia({ 
+            video: { 
+                facingMode: "user",
+                width: {理想的: 1280},
+                height: {理想的: 720}
+            } 
+        }).then(stream => { video.srcObject = stream; });
 
         snapBtn.addEventListener('click', async () => {
             snapBtn.disabled = true;
             const captures = [];
+
+            // We use the actual intrinsic size of the video stream
+            const vW = video.videoWidth;
+            const vH = video.videoHeight;
 
             for (let i = 0; i < 4; i++) {
                 for (let count = 3; count > 0; count--) {
@@ -83,80 +97,28 @@
                 }
                 countdownEl.innerText = "";
 
+                // Visual Flash
                 flashEl.classList.remove('flash-active');
                 void flashEl.offsetWidth; 
                 flashEl.classList.add('flash-active');
 
                 const tempCanvas = document.createElement('canvas');
-                // Target: 16:9 Landscape
+                // Target Landscape Ratio (16:9)
                 tempCanvas.width = 1280; 
                 tempCanvas.height = 720;
                 const tCtx = tempCanvas.getContext('2d');
                 
-                // MATH TO PREVENT STRETCHING (Center Crop)
-                const videoRatio = video.videoWidth / video.videoHeight;
-                const targetRatio = tempCanvas.width / tempCanvas.height;
-                let sw, sh, sx, sy;
-
-                if (videoRatio > targetRatio) {
-                    sh = video.videoHeight;
-                    sw = sh * targetRatio;
-                    sx = (video.videoWidth - sw) / 2;
-                    sy = 0;
-                } else {
-                    sw = video.videoWidth;
-                    sh = sw / targetRatio;
-                    sx = 0;
-                    sy = (video.videoHeight - sh) / 2;
-                }
-
+                // MIRROR AND CROP LOGIC
                 tCtx.translate(tempCanvas.width, 0);
                 tCtx.scale(-1, 1);
-                tCtx.drawImage(video, sx, sy, sw, sh, 0, 0, tempCanvas.width, tempCanvas.height);
-                
-                captures.push(tempCanvas);
-                await new Promise(r => setTimeout(r, 600)); 
-            }
 
-            renderStrip(captures);
-            snapBtn.disabled = false;
-        });
+                // Calculate crop to maintain 16:9 regardless of camera input
+                const targetRatio = 16 / 9;
+                const currentRatio = vW / vH;
+                let drawW, drawH, offsetX, offsetY;
 
-        function renderStrip(images) {
-            const w = images[0].width;
-            const h = images[0].height;
-            const p = 50; 
-
-            canvas.width = w + (p * 2);
-            canvas.height = (h * 4) + (p * 5) + 60; // Extra room for branding
-            
-            ctx.fillStyle = "white";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            images.forEach((img, i) => {
-                ctx.drawImage(img, p, p + (i * (h + p)));
-            });
-
-            // Branding Text
-            ctx.fillStyle = "#333";
-            ctx.font = "bold 40px Arial";
-            ctx.textAlign = "center";
-            ctx.fillText("LENTRASBOOTH SERVICES", canvas.width/2, canvas.height - 40);
-
-            const data = canvas.toDataURL('image/png');
-            const div = document.createElement('div');
-            div.className = 'strip-container';
-            div.innerHTML = `<img src="${data}"><div class="footer-text">LENTRASBOOTH SERVICES</div>`;
-            
-            div.onclick = () => {
-                const a = document.createElement('a');
-                a.href = data;
-                a.download = `LentraSBooth-${Date.now()}.png`;
-                a.click();
-            };
-
-            gallery.prepend(div);
-        }
-    </script>
-</body>
-</html>
+                if (currentRatio > targetRatio) {
+                    drawH = vH;
+                    drawW = vH * targetRatio;
+                    offsetX
+        
