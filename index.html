@@ -3,63 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>LentraSBooth | Universal Fix</title>
+    <title>LentraSBooth | External Cam</title>
     <style>
         :root { --accent: #ff4757; }
         body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; background: #000; color: white; margin: 0; padding: 10px; }
-        
-        #stage { 
-            position: relative; width: 100%; max-width: 600px; 
-            aspect-ratio: 16/9; border: 2px solid #444; overflow: hidden; background: #111;
-        }
-        
+        #stage { position: relative; width: 100%; max-width: 600px; aspect-ratio: 16/9; border: 2px solid #444; overflow: hidden; background: #111; }
         video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
-
-        /* B&W Filter Class for Preview */
         .bw-mode { filter: grayscale(100%); -webkit-filter: grayscale(100%); }
-
-        #countdown {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            font-size: 80px; font-weight: bold; z-index: 10; pointer-events: none;
-            text-shadow: 0 0 15px rgba(0,0,0,0.8);
-        }
-
-        #flash {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: white; opacity: 0; z-index: 11; pointer-events: none;
-        }
+        #countdown { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 80px; font-weight: bold; z-index: 10; text-shadow: 0 0 15px rgba(0,0,0,0.8); }
+        #flash { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: white; opacity: 0; z-index: 11; pointer-events: none; }
         .flash-active { animation: flash 0.3s ease-out; }
         @keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
-
         .controls { width: 100%; max-width: 600px; margin: 15px 0; display: flex; gap: 10px; }
         #snap { flex-grow: 1; padding: 18px; font-size: 1.1rem; border-radius: 8px; border: none; background: var(--accent); color: white; font-weight: bold; cursor: pointer; }
-        #snap:disabled { opacity: 0.5; }
-
-        /* Filter Button Styling */
         #filterToggle { padding: 18px; font-size: 1.1rem; border-radius: 8px; border: 2px solid #444; background: #222; color: white; font-weight: bold; cursor: pointer; width: 100px; }
-        #filterToggle.active-bw { background: white; color: black; border-color: white; }
-
         #gallery { display: flex; flex-direction: column; gap: 20px; width: 100%; max-width: 400px; }
         .strip { background: white; padding: 15px; border-radius: 2px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); margin-top: 10px;}
         .strip img { width: 100%; height: auto; display: block; }
-        .footer { color: #000; font-size: 14px; text-align: center; margin-top: 10px; font-weight: bold; }
     </style>
 </head>
 <body>
-
     <h3 style="margin: 10px 0;">LENTRASBOOTH</h3>
-
     <div id="stage">
         <div id="countdown"></div>
         <div id="flash"></div>
         <video id="video" autoplay playsinline></video>
     </div>
-
     <div class="controls">
         <button id="filterToggle">COLOR</button>
         <button id="snap">TAKE 4 PHOTOS</button>
     </div>
-
     <div id="gallery"></div>
     <canvas id="canvas" style="display:none;"></canvas>
 
@@ -75,111 +48,79 @@
 
         let isBnW = false;
 
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
-            .then(s => video.srcObject = s);
+        // UPDATED: More flexible camera constraints
+        const constraints = {
+            video: {
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+                facingMode: "user" // Defaults to selfie, but allows override
+            }
+        };
 
-        // --- Filter Toggle Logic ---
+        navigator.mediaDevices.getUserMedia(constraints)
+            .then(s => { video.srcObject = s; })
+            .catch(err => { alert("Camera error: " + err.message); });
+
         filterBtn.addEventListener('click', () => {
             isBnW = !isBnW;
-            
-            if (isBnW) {
-                video.classList.add('bw-mode'); // Applies grayscale to live feed
-                filterBtn.innerText = "B&W";
-                filterBtn.classList.add('active-bw');
-            } else {
-                video.classList.remove('bw-mode');
-                filterBtn.innerText = "COLOR";
-                filterBtn.classList.remove('active-bw');
-            }
+            filterBtn.innerText = isBnW ? "B&W" : "COLOR";
+            video.style.filter = isBnW ? "grayscale(100%)" : "none";
         });
 
-        // --- Photo logic ---
         snapBtn.addEventListener('click', async () => {
             snapBtn.disabled = true;
-            filterBtn.disabled = true; // Lock filter during session
             const captures = [];
-
             for (let i = 0; i < 4; i++) {
                 for (let c = 3; c > 0; c--) {
                     countdownEl.innerText = c;
                     await new Promise(r => setTimeout(r, 1000));
                 }
                 countdownEl.innerText = "";
-
-                flashEl.classList.remove('flash-active');
-                void flashEl.offsetWidth; 
                 flashEl.classList.add('flash-active');
+                setTimeout(() => flashEl.classList.remove('flash-active'), 300);
 
-                // DYNAMIC CROP MATH (Anti-Stretch)
                 const temp = document.createElement('canvas');
-                temp.width = 1280; 
-                temp.height = 720;
+                temp.width = 1280; temp.height = 720;
                 const tCtx = temp.getContext('2d');
                 
+                // Crop & Mirror Logic
                 const vW = video.videoWidth;
                 const vH = video.videoHeight;
                 const targetRatio = 16 / 9;
-                
-                let sourceW, sourceH, sourceX, sourceY;
-
+                let sW, sH, sX, sY;
                 if ((vW / vH) > targetRatio) {
-                    sourceH = vH;
-                    sourceW = vH * targetRatio;
-                    sourceX = (vW - sourceW) / 2;
-                    sourceY = 0;
+                    sH = vH; sW = vH * targetRatio; sX = (vW - sW) / 2; sY = 0;
                 } else {
-                    sourceW = vW;
-                    sourceH = vW / targetRatio;
-                    sourceX = 0;
-                    sourceY = (vH - sourceH) / 2;
+                    sW = vW; sH = vW / targetRatio; sX = 0; sY = (vH - sH) / 2;
                 }
 
-                // Apply B&W filter to the capture canvas if active
-                if (isBnW) {
-                    tCtx.filter = 'grayscale(100%)';
-                }
-
+                if (isBnW) tCtx.filter = 'grayscale(100%)';
                 tCtx.translate(temp.width, 0);
                 tCtx.scale(-1, 1);
-                tCtx.drawImage(video, sourceX, sourceY, sourceW, sourceH, 0, 0, temp.width, temp.height);
-                
-                tCtx.filter = 'none'; // Reset filter
-
+                tCtx.drawImage(video, sX, sY, sW, sH, 0, 0, temp.width, temp.height);
                 captures.push(temp);
                 await new Promise(r => setTimeout(r, 500)); 
             }
-
             render(captures);
             snapBtn.disabled = false;
-            filterBtn.disabled = false; // Unlock filter
         });
 
         function render(images) {
             const w = 1280, h = 720, p = 50;
             canvas.width = w + (p * 2);
-            canvas.height = (h * 4) + (p * 5) + 100;
-            
+            canvas.height = (h * 4) + (p * 5);
             ctx.fillStyle = "white";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-
             images.forEach((img, i) => {
                 ctx.drawImage(img, p, p + (i * (h + p)));
             });
-
-            ctx.fillStyle = "#000";
-            ctx.font = "bold 50px Arial";
-            ctx.textAlign = "center";
-            ctx.fillText("LENTRASBOOTH SERVICES", canvas.width/2, canvas.height - 60);
-
             const data = canvas.toDataURL('image/png');
             const div = document.createElement('div');
             div.className = 'strip';
-            div.innerHTML = `<img src="${data}"><div class="footer">LENTRASBOOTH SERVICES</div>`;
+            div.innerHTML = `<img src="${data}">`;
             div.onclick = () => {
                 const a = document.createElement('a');
-                a.href = data;
-                a.download = `booth-${Date.now()}.png`;
-                a.click();
+                a.href = data; a.download = `booth-${Date.now()}.png`; a.click();
             };
             gallery.prepend(div);
         }
