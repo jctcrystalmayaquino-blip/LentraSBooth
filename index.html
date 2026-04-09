@@ -3,11 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>LentraSBooth | Auto-Reset Kiosk</title>
+    <title>LentraSBooth | Hybrid Kiosk</title>
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
     <style>
-        :root { --accent: #ff4757; }
+        :root { --accent: #ff4757; --dark: #121212; }
         body { font-family: -apple-system, sans-serif; background: #000; color: white; margin: 0; padding: 0; overflow: hidden; width: 100vw; height: 100vh; }
         
         #stage { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; overflow: hidden; background: #000; z-index: 10; cursor: pointer; }
@@ -21,27 +20,23 @@
         #hint { position: absolute; bottom: 10%; width: 100%; text-align: center; font-size: 1.5rem; font-weight: bold; z-index: 15; pointer-events: none; animation: pulse 2s infinite; text-shadow: 0 2px 10px rgba(0,0,0,1); }
         @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
 
-        /* Selection Overlay */
-        #selectionOverlay {
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: rgba(0,0,0,0.95); z-index: 50; display: none;
-            flex-direction: column; align-items: center; justify-content: center;
-        }
-        .options-container { display: flex; gap: 10px; width: 95%; max-width: 1000px; justify-content: center; }
-        .option-card { width: 30%; cursor: pointer; border: 6px solid transparent; border-radius: 12px; overflow: hidden; transition: 0.2s; position: relative; }
-        .option-card img { width: 100%; display: block; }
-        .option-card.selected { border-color: var(--accent); transform: scale(1.05); }
-        .option-card.selected::after { content: "✓"; position: absolute; top: 10px; right: 10px; background: var(--accent); color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+        /* General Overlay Style */
+        .overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.95); z-index: 100; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; }
 
-        /* Result Overlay */
-        #resultOverlay {
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: rgba(0,0,0,0.95); z-index: 100; display: none;
-            flex-direction: column; align-items: center; justify-content: center; padding: 20px;
-        }
-        .instax-results { display: flex; gap: 15px; max-width: 100%; justify-content: center; }
-        .instax-preview { box-shadow: 0 20px 60px rgba(0,0,0,1); line-height: 0; }
-        .instax-preview img { height: auto; max-height: 60vh; max-width: 100%; display: block; }
+        /* Style Selection */
+        .mode-btn { width: 250px; padding: 30px; margin: 15px; border-radius: 20px; border: 2px solid #fff; background: transparent; color: white; font-size: 1.5rem; font-weight: bold; cursor: pointer; }
+        .mode-btn:active { background: var(--accent); border-color: var(--accent); }
+
+        /* Image Grids */
+        .options-container { display: flex; gap: 10px; width: 95%; max-width: 1000px; justify-content: center; }
+        .option-card { width: 30%; cursor: pointer; border: 6px solid transparent; border-radius: 12px; overflow: hidden; position: relative; }
+        .option-card img { width: 100%; display: block; }
+        .option-card.selected { border-color: var(--accent); }
+
+        /* Results */
+        .result-scroll { display: flex; gap: 15px; max-width: 100%; overflow-x: auto; padding: 10px; }
+        .preview-img { box-shadow: 0 20px 60px rgba(0,0,0,1); background: white; }
+        .preview-img img { height: auto; max-height: 65vh; display: block; }
         
         .btn-row { display: flex; gap: 15px; margin-top: 25px; width: 100%; max-width: 500px; }
         .btn { flex: 1; padding: 18px; border-radius: 50px; border: none; font-weight: bold; cursor: pointer; font-size: 1rem; text-transform: uppercase; }
@@ -52,22 +47,27 @@
 <body>
 
     <div id="stage" onclick="handleStageClick()">
-        <div id="hint">TAP TO START (3 SHOTS)</div>
+        <div id="hint">TAP TO START</div>
         <div id="countdown"></div>
         <div id="flash"></div>
         <video id="video" autoplay playsinline></video>
     </div>
 
-    <div id="selectionOverlay">
-        <h2 style="margin-bottom: 20px;">PICK 2 FAVORITES</h2>
-        <div class="options-container" id="options"></div>
-        <button class="btn retake-btn" style="margin-top: 30px; max-width: 200px;" onclick="resetBooth()">CANCEL</button>
+    <div id="modeOverlay" class="overlay">
+        <h1>CHOOSE YOUR STYLE</h1>
+        <button class="mode-btn" onclick="selectMode('INSTAX')">INSTAX<br><small>(Pick 2)</small></button>
+        <button class="mode-btn" onclick="selectMode('STRIP')">STRIP<br><small>(All 3)</small></button>
     </div>
 
-    <div id="resultOverlay">
-        <div class="instax-results" id="instaxResults"></div>
+    <div id="selectionOverlay" class="overlay">
+        <h2 style="margin-bottom: 20px;">PICK 2 FAVORITES</h2>
+        <div class="options-container" id="options"></div>
+    </div>
+
+    <div id="resultOverlay" class="overlay">
+        <div class="result-scroll" id="resultContent"></div>
         <div class="btn-row">
-            <button class="btn save-btn" id="downloadAll">SAVE BOTH</button>
+            <button class="btn save-btn" id="downloadBtn">SAVE TO GALLERY</button>
             <button class="btn retake-btn" onclick="resetBooth()">DONE</button>
         </div>
     </div>
@@ -78,26 +78,19 @@
         const video = document.getElementById('video');
         const countdownEl = document.getElementById('countdown');
         const flashEl = document.getElementById('flash');
-        const selectionOverlay = document.getElementById('selectionOverlay');
-        const optionsContainer = document.getElementById('options');
-        const resultOverlay = document.getElementById('resultOverlay');
-        const instaxResults = document.getElementById('instaxResults');
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-
+        const overlays = ['modeOverlay', 'selectionOverlay', 'resultOverlay'];
+        
         let capturedImages = [];
         let selectedIndices = [];
         let isShooting = false;
         let finalFiles = [];
+        let currentMode = "";
 
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
-            .then(s => video.srcObject = s);
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } }).then(s => video.srcObject = s);
 
         function handleStageClick() {
             if (isShooting) return;
-            const docEl = document.documentElement;
-            if (docEl.requestFullscreen) { docEl.requestFullscreen(); }
-            else if (docEl.webkitRequestFullscreen) { docEl.webkitRequestFullscreen(); }
+            if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
             startSession();
         }
 
@@ -105,9 +98,7 @@
             isShooting = true;
             document.getElementById('hint').style.display = 'none';
             capturedImages = [];
-            selectedIndices = [];
-            finalFiles = [];
-
+            
             for (let i = 0; i < 3; i++) {
                 for (let c = 3; c > 0; c--) {
                     countdownEl.innerText = c;
@@ -120,100 +111,120 @@
                 const temp = document.createElement('canvas');
                 temp.width = 800; temp.height = 1000;
                 const tCtx = temp.getContext('2d');
-                const vW = video.videoWidth;
-                const vH = video.videoHeight;
-                const targetRatio = 800 / 1000;
-                let sW, sH, sX, sY;
+                const vW = video.videoWidth, vH = video.videoHeight;
+                const ratio = 800/1000;
+                let sW = vW, sH = vW/ratio, sX = 0, sY = (vH - sH)/2;
+                if (vW/vH > ratio) { sH = vH; sW = vH*ratio; sX = (vW - sW)/2; sY = 0; }
 
-                if ((vW / vH) > targetRatio) {
-                    sH = vH; sW = vH * targetRatio; sX = (vW - sW) / 2; sY = 0;
-                } else {
-                    sW = vW; sH = vW / targetRatio; sX = 0; sY = (vH - sH) / 2;
-                }
-
-                tCtx.translate(temp.width, 0);
-                tCtx.scale(-1, 1);
+                tCtx.translate(temp.width, 0); tCtx.scale(-1, 1);
                 tCtx.drawImage(video, sX, sY, sW, sH, 0, 0, temp.width, temp.height);
                 capturedImages.push(temp.toDataURL('image/png'));
                 await new Promise(r => setTimeout(r, 600)); 
             }
-            showSelection();
+            document.getElementById('modeOverlay').style.display = 'flex';
+        }
+
+        function selectMode(mode) {
+            currentMode = mode;
+            document.getElementById('modeOverlay').style.display = 'none';
+            if (mode === 'INSTAX') {
+                showSelection();
+            } else {
+                processStrip();
+            }
         }
 
         function showSelection() {
-            selectionOverlay.style.display = 'flex';
-            optionsContainer.innerHTML = '';
-            capturedImages.forEach((src, index) => {
+            const container = document.getElementById('options');
+            container.innerHTML = '';
+            document.getElementById('selectionOverlay').style.display = 'flex';
+            capturedImages.forEach((src, idx) => {
                 const div = document.createElement('div');
                 div.className = 'option-card';
                 div.innerHTML = `<img src="${src}">`;
                 div.onclick = () => {
-                    if (selectedIndices.includes(index)) return;
-                    selectedIndices.push(index);
+                    if (selectedIndices.includes(idx)) return;
+                    selectedIndices.push(idx);
                     div.classList.add('selected');
-                    if (selectedIndices.length === 2) {
-                        setTimeout(processDoubleInstax, 500);
-                    }
+                    if (selectedIndices.length === 2) setTimeout(processDoubleInstax, 500);
                 };
-                optionsContainer.appendChild(div);
+                container.appendChild(div);
             });
         }
 
         async function processDoubleInstax() {
-            selectionOverlay.style.display = 'none';
-            instaxResults.innerHTML = '';
-            for (let srcIndex of selectedIndices) {
-                const dataUrl = await generateInstaxData(capturedImages[srcIndex]);
-                finalFiles.push(dataUrl);
-                const container = document.createElement('div');
-                container.innerHTML = `<div class="instax-preview"><img src="${dataUrl}"></div>`;
-                instaxResults.appendChild(container);
+            document.getElementById('selectionOverlay').style.display = 'none';
+            for (let idx of selectedIndices) {
+                const data = await generateFrame(capturedImages[idx], 'INSTAX');
+                addResultPreview(data);
             }
-            resultOverlay.style.display = 'flex';
+            showResults();
         }
 
-        // Logic to Save and then Loop back
-        document.getElementById('downloadAll').onclick = () => {
-            finalFiles.forEach((file, i) => {
-                const a = document.createElement('a');
-                a.href = file;
-                a.download = `Instax-${Date.now()}-${i+1}.png`;
-                a.click();
+        async function processStrip() {
+            const data = await generateFrame(capturedImages, 'STRIP');
+            addResultPreview(data);
+            showResults();
+        }
+
+        function addResultPreview(data) {
+            finalFiles.push(data);
+            const div = document.createElement('div');
+            div.className = 'preview-img';
+            div.innerHTML = `<img src="${data}">`;
+            document.getElementById('resultContent').appendChild(div);
+        }
+
+        function showResults() {
+            document.getElementById('resultOverlay').style.display = 'flex';
+            document.getElementById('downloadBtn').onclick = () => {
+                finalFiles.forEach((f, i) => {
+                    const a = document.createElement('a');
+                    a.href = f; a.download = `Booth-${currentMode}-${i}.png`; a.click();
+                });
+                setTimeout(resetBooth, 1000);
+            };
+        }
+
+        function generateFrame(input, type) {
+            return new Promise(res => {
+                const canvas = document.getElementById('canvas');
+                const ctx = canvas.getContext('2d');
+                if (type === 'INSTAX') {
+                    const p = 50, w = 800, h = 1000, bp = 250;
+                    canvas.width = w + (p*2); canvas.height = h + p + bp;
+                    ctx.fillStyle = "#fff"; ctx.fillRect(0,0,canvas.width,canvas.height);
+                    const img = new Image();
+                    img.onload = () => {
+                        ctx.drawImage(img, p, p, w, h);
+                        ctx.strokeStyle = "rgba(0,0,0,0.1)"; ctx.lineWidth = 2;
+                        ctx.strokeRect(p, p, w, h);
+                        res(canvas.toDataURL());
+                    };
+                    img.src = input;
+                } else {
+                    const p = 40, w = 800, h = 1000;
+                    canvas.width = w + (p*2); canvas.height = (h*3) + (p*4) + 100;
+                    ctx.fillStyle = "#fff"; ctx.fillRect(0,0,canvas.width,canvas.height);
+                    let loaded = 0;
+                    input.forEach((src, i) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            ctx.drawImage(img, p, p + (i*(h+p)), w, h);
+                            loaded++;
+                            if(loaded === 3) res(canvas.toDataURL());
+                        };
+                        img.src = src;
+                    });
+                }
             });
-            // Brief pause so the downloads trigger before the screen clears
-            setTimeout(resetBooth, 1000);
-        };
+        }
 
         function resetBooth() {
-            // Hide all overlays
-            resultOverlay.style.display = 'none';
-            selectionOverlay.style.display = 'none';
-            // Reset state
-            isShooting = false;
-            capturedImages = [];
-            selectedIndices = [];
-            finalFiles = [];
-            // Show start hint
+            overlays.forEach(id => document.getElementById(id).style.display = 'none');
+            isShooting = false; selectedIndices = []; finalFiles = [];
+            document.getElementById('resultContent').innerHTML = '';
             document.getElementById('hint').style.display = 'block';
-        }
-
-        function generateInstaxData(selectedSrc) {
-            return new Promise((resolve) => {
-                const p = 50; const photoW = 800; const photoH = 1000; const bottomP = 250;
-                canvas.width = photoW + (p * 2);
-                canvas.height = photoH + p + bottomP;
-                ctx.fillStyle = "#ffffff"; 
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                const img = new Image();
-                img.onload = () => {
-                    ctx.drawImage(img, p, p, photoW, photoH);
-                    ctx.strokeStyle = "rgba(0,0,0,0.15)";
-                    ctx.lineWidth = 3;
-                    ctx.strokeRect(p + 1, p + 1, photoW - 2, photoH - 2);
-                    resolve(canvas.toDataURL('image/png'));
-                };
-                img.src = selectedSrc;
-            });
         }
     </script>
 </body>
